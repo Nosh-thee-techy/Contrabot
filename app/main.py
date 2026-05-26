@@ -1,9 +1,10 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, JSONResponse
 from dotenv import load_dotenv
 import os
 
 from app.ussd import handle_ussd_input
+from app.whatsapp import handle_whatsapp_webhook, verify_whatsapp_webhook
 
 load_dotenv()
 
@@ -35,3 +36,15 @@ async def ussd_webhook(request: Request):
         return PlainTextResponse("END Missing required USSD parameters.", media_type="text/plain")
 
     return handle_ussd_input(session_id, text, phone_number)
+
+
+@app.get("/whatsapp")
+async def verify_whatsapp(request: Request):
+    """Verify WhatsApp webhook with Meta."""
+    return await verify_whatsapp_webhook(request)
+
+
+@app.post("/whatsapp")
+async def handle_whatsapp(request: Request):
+    """Handle incoming WhatsApp messages from Meta."""
+    return await handle_whatsapp_webhook(request)
