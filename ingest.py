@@ -50,11 +50,11 @@ def chunk_pdf(pdf_path: str, chunk_size: int = 800, overlap: int = 200) -> list:
                 }
                 chunks.append((chunk, metadata))
 
-        print(f"✓ Extracted {len(chunks)} chunks from {pdf_path}")
+        print(f"Extracted {len(chunks)} chunks from {pdf_path}")
         return chunks
 
     except Exception as e:
-        print(f"✗ Error chunking PDF: {e}")
+        print(f"Error chunking PDF: {e}")
         return []
 
 
@@ -100,11 +100,11 @@ def ingest_knowledge_base(collection_name: str = "who_mec") -> bool:
             metadatas=metadatas,
         )
 
-        print(f"✓ Ingested {len(chunks)} WHO MEC chunks into ChromaDB collection '{collection_name}'")
+        print(f"Ingested {len(chunks)} WHO MEC chunks into ChromaDB collection '{collection_name}'")
         return True
 
     except Exception as e:
-        print(f"✗ Error ingesting knowledge base: {e}")
+        print(f"Error ingesting knowledge base: {e}")
         return False
 
 
@@ -135,7 +135,7 @@ if __name__ == "__main__":
     print("Starting ContraBot knowledge base ingestion...\n")
 
     if ingest_knowledge_base():
-        print("\n✓ Knowledge base ingestion complete.\n")
+        print("\nKnowledge base ingestion complete.\n")
 
         test_queries = [
             "What methods are safe for breastfeeding mothers?",
@@ -153,4 +153,4 @@ if __name__ == "__main__":
             print()
 
     else:
-        print("✗ Knowledge base ingestion failed.")
+        print("Knowledge base ingestion failed.")
