@@ -9,4 +9,9 @@ __pycache__/
 .idea/
 dist/
 build/
+node_modules/
+web/dist/
+chw/dist/
+frontend/dist/
+data/chromadb/*.sqlite3
 *.pyc

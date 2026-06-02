@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+import httpx
 
 # Load .env from project root
 project_root = Path(__file__).parent.parent
@@ -51,13 +52,65 @@ def _get_openai_client():
         return None
 
 
+# Anthropic key (optional)
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
+
+def _anthropic_completion(messages, model=None, max_tokens=500):
+    """Simple Anthropic completion via REST as a fallback."""
+    if not ANTHROPIC_API_KEY:
+        return None
+    # Concatenate messages into a single prompt
+    prompt = "\n".join([m.get("content", "") for m in messages])
+    payload = {
+        "model": model or os.getenv("ANTHROPIC_CHAT_MODEL", "claude-2.1"),
+        "prompt": prompt,
+        "max_tokens_to_sample": max_tokens,
+    }
+    headers = {"Content-Type": "application/json", "x-api-key": ANTHROPIC_API_KEY}
+    try:
+        resp = httpx.post("https://api.anthropic.com/v1/complete", json=payload, headers=headers, timeout=30)
+        resp.raise_for_status()
+        j = resp.json()
+        # Try several potential fields
+        return j.get("completion") or j.get("text") or j.get("output", "")
+    except Exception:
+        return None
+
+
+def _anthropic_embeddings(texts, model=None):
+    if not ANTHROPIC_API_KEY:
+        return None
+    payload = {"model": model or os.getenv("ANTHROPIC_EMBED_MODEL", "claude-2-embeddings"), "input": texts}
+    headers = {"Content-Type": "application/json", "x-api-key": ANTHROPIC_API_KEY}
+    try:
+        resp = httpx.post("https://api.anthropic.com/v1/embeddings", json=payload, headers=headers, timeout=60)
+        resp.raise_for_status()
+        j = resp.json()
+        # standard shape: {"data": [{"embedding": [...]}, ...]}
+        out = []
+        for item in j.get("data", []):
+            if isinstance(item, dict):
+                out.append(item.get("embedding") or item.get("values") or [])
+            else:
+                out.append([])
+        return out
+    except Exception:
+        return None
+
+
 def chat_completion(messages, model=None, temperature=0.7, max_tokens=500):
     """Return a text completion using Gemini (preferred) or OpenAI.
 
     `messages` is a list of dicts like OpenAI chat messages. For Gemini we
     concatenate messages into a single prompt.
     """
-    # Gemini path
+    # Anthropic preferred
+    anthropic_resp = _anthropic_completion(messages, model=model, max_tokens=max_tokens)
+    if anthropic_resp:
+        return anthropic_resp
+
+    # Gemini next
     gc = _get_gemini_client()
     if gc:
         prompt = "\n".join([m.get("content", "") for m in messages])
@@ -109,6 +162,11 @@ def get_embeddings(texts, model=None):
         if isinstance(r, (list, tuple)):
             return list(r)
         return []
+
+    # Anthropic preferred
+    anth_emb = _anthropic_embeddings(texts, model=model)
+    if anth_emb:
+        return anth_emb
 
     # Gemini path
     gc = _get_gemini_client()

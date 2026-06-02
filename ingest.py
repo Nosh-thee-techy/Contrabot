@@ -1,156 +1,136 @@
 #!/usr/bin/env python
 """
 Ingest script for ContraBot knowledge base.
-Uses the WHO MEC PDF already stored in the repo and embeds chunks into ChromaDB.
+Ingests WHO MEC PDF and APHRC structured datasets into ChromaDB.
 """
 
+import hashlib
+import json
 from pathlib import Path
+
 import chromadb
 import PyPDF2
-import hashlib
-from app.openai_client import get_embeddings
 
+from app.openai_client import get_embeddings
 
 DATA_DIR = Path(__file__).parent / "data"
 CHROMADB_DIR = DATA_DIR / "chromadb"
+APHRC_DIR = DATA_DIR / "aphrc"
 CHROMADB_DIR.mkdir(parents=True, exist_ok=True)
 
 WHO_MEC_LOCAL_PATH = CHROMADB_DIR / "WHO_MEC.pdf"
+APHRC_JSON_PATH = APHRC_DIR / "records.json"
+
+
+def chunk_text(text: str, chunk_size: int = 800, overlap: int = 200, source: str = "unknown", extra_meta: dict | None = None) -> list:
+    chunks = []
+    extra_meta = extra_meta or {}
+    for i in range(0, len(text), chunk_size - overlap):
+        chunk = text[i : i + chunk_size]
+        if chunk.strip():
+            metadata = {"source": source, "chunk_id": hashlib.md5(chunk.encode()).hexdigest()[:8], **extra_meta}
+            chunks.append((chunk, metadata))
+    return chunks
 
 
 def chunk_pdf(pdf_path: str, chunk_size: int = 800, overlap: int = 200) -> list:
-    """
-    Extract text from PDF and chunk it into overlapping segments.
-
-    Args:
-        pdf_path: Path to the PDF file
-        chunk_size: Approximate chunk size in characters
-        overlap: Character overlap between chunks
-
-    Returns:
-        List of (text, metadata) tuples
-    """
     chunks = []
-
     try:
         with open(pdf_path, "rb") as f:
             reader = PyPDF2.PdfReader(f)
             full_text = ""
-
             for page in reader.pages:
-                page_text = page.extract_text() or ""
-                full_text += page_text + "\n"
-
-        for i in range(0, len(full_text), chunk_size - overlap):
-            chunk = full_text[i : i + chunk_size]
-            if chunk.strip():
-                metadata = {
-                    "source": "WHO_MEC",
-                    "chunk_id": hashlib.md5(chunk.encode()).hexdigest()[:8],
-                }
-                chunks.append((chunk, metadata))
-
-        print(f"Extracted {len(chunks)} chunks from {pdf_path}")
+                full_text += (page.extract_text() or "") + "\n"
+        return chunk_text(full_text, chunk_size, overlap, source="WHO_MEC")
+    except Exception as exc:
+        print(f"Error chunking PDF: {exc}")
         return chunks
 
-    except Exception as e:
-        print(f"Error chunking PDF: {e}")
+
+def chunk_aphrc_records(records_path: Path) -> list:
+    if not records_path.exists():
+        print(f"APHRC data not found at {records_path}")
         return []
+    with open(records_path, encoding="utf-8") as f:
+        records = json.load(f)
+    chunks = []
+    for rec in records:
+        text = rec.get("text", "")
+        if not text.strip():
+            continue
+        meta = {
+            "source": "APHRC",
+            "region": rec.get("region", "East Africa"),
+            "method": rec.get("method", "unknown"),
+            "discontinuation_reason": rec.get("discontinuation_reason", "none"),
+        }
+        chunks.extend(chunk_text(text, chunk_size=600, overlap=100, source="APHRC", extra_meta=meta))
+    print(f"Prepared {len(chunks)} APHRC chunks")
+    return chunks
 
 
-def ingest_knowledge_base(collection_name: str = "who_mec") -> bool:
-    """
-    Initialize ChromaDB and ingest WHO MEC knowledge base.
-
-    Args:
-        collection_name: Name of the ChromaDB collection
-
-    Returns:
-        True if successful, False otherwise
-    """
-    if not WHO_MEC_LOCAL_PATH.exists():
-        print(f"✗ WHO MEC PDF not found at {WHO_MEC_LOCAL_PATH}")
-        return False
-
-    print(f"Using PDF at: {WHO_MEC_LOCAL_PATH}")
-    chunks = chunk_pdf(str(WHO_MEC_LOCAL_PATH))
+def _ingest_collection(client, collection_name: str, chunks: list) -> bool:
     if not chunks:
         return False
-
     try:
-        client = chromadb.PersistentClient(path=str(CHROMADB_DIR))
         try:
             client.delete_collection(name=collection_name)
         except Exception:
             pass
-
         collection = client.create_collection(name=collection_name)
-
-        texts = [text for text, metadata in chunks]
-        metadatas = [metadata for text, metadata in chunks]
-        ids = [f"chunk_{i}" for i in range(len(chunks))]
-
-        print("Generating embeddings for WHO MEC chunks...")
+        texts = [t for t, _ in chunks]
+        metadatas = [m for _, m in chunks]
+        ids = [f"{collection_name}_{i}" for i in range(len(chunks))]
+        print(f"Generating embeddings for {collection_name} ({len(chunks)} chunks)...")
         embeddings = get_embeddings(texts)
-
-        collection.add(
-            ids=ids,
-            embeddings=embeddings,
-            documents=texts,
-            metadatas=metadatas,
-        )
-
-        print(f"Ingested {len(chunks)} WHO MEC chunks into ChromaDB collection '{collection_name}'")
+        collection.add(ids=ids, embeddings=embeddings, documents=texts, metadatas=metadatas)
+        print(f"Ingested {len(chunks)} chunks into '{collection_name}'")
         return True
-
-    except Exception as e:
-        print(f"Error ingesting knowledge base: {e}")
+    except Exception as exc:
+        print(f"Error ingesting {collection_name}: {exc}")
         return False
 
 
-def query_knowledge_base(query: str, collection_name: str = "who_mec", num_results: int = 3) -> list:
-    """
-    Query the ChromaDB knowledge base.
+def ingest_knowledge_base() -> bool:
+    client = chromadb.PersistentClient(path=str(CHROMADB_DIR))
+    ok = False
 
-    Args:
-        query: Search query string
-        collection_name: Name of the ChromaDB collection
-        num_results: Number of results to return
+    if WHO_MEC_LOCAL_PATH.exists():
+        who_chunks = chunk_pdf(str(WHO_MEC_LOCAL_PATH))
+        ok = _ingest_collection(client, "who_mec", who_chunks) or ok
+    else:
+        print(f"WHO MEC PDF not found at {WHO_MEC_LOCAL_PATH}")
 
-    Returns:
-        List of relevant documents
-    """
+    aphrc_chunks = chunk_aphrc_records(APHRC_JSON_PATH)
+    if aphrc_chunks:
+        ok = _ingest_collection(client, "aphrc", aphrc_chunks) or ok
+
+    return ok
+
+
+def query_knowledge_base(query: str, collection_name: str = "who_mec", num_results: int = 3) -> dict:
     try:
         client = chromadb.PersistentClient(path=str(CHROMADB_DIR))
         collection = client.get_collection(name=collection_name)
-        results = collection.query(query_texts=[query], n_results=num_results)
-        return results
-
-    except Exception as e:
-        print(f"✗ Error querying knowledge base: {e}")
-        return []
+        return collection.query(query_texts=[query], n_results=num_results)
+    except Exception as exc:
+        print(f"Query error: {exc}")
+        return {}
 
 
 if __name__ == "__main__":
     print("Starting ContraBot knowledge base ingestion...\n")
-
     if ingest_knowledge_base():
-        print("\nKnowledge base ingestion complete.\n")
-
-        test_queries = [
+        print("\nIngestion complete.\n")
+        for q in [
             "What methods are safe for breastfeeding mothers?",
-            "Which contraceptive methods don't require a clinic visit?",
-            "What are the side effects of injectable contraceptives?",
-        ]
-
-        print("Running test queries:\n")
-        for test_query in test_queries:
-            results = query_knowledge_base(test_query, num_results=2)
-            print(f"Query: '{test_query}'")
-            if results and results.get("documents"):
-                for i, doc in enumerate(results["documents"][0], 1):
-                    print(f"  Result {i}: {doc[:150]}...")
+            "Why do women discontinue injectables in Nairobi?",
+        ]:
+            print(f"Query: {q}")
+            for coll in ("who_mec", "aphrc"):
+                r = query_knowledge_base(q, collection_name=coll, num_results=1)
+                if r.get("documents"):
+                    print(f"  [{coll}] {r['documents'][0][0][:120]}...")
             print()
-
     else:
-        print("Knowledge base ingestion failed.")
+        print("Ingestion failed or no data found.")

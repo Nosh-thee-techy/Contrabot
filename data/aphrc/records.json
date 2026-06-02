@@ -1,0 +1,50 @@
+[
+  {
+    "region": "Nairobi",
+    "method": "injectable",
+    "discontinuation_reason": "side_effects",
+    "text": "In Nairobi slums, women often discontinue DMPA injectables due to irregular bleeding and fear of infertility rumors. Community health workers report that counseling on expected side effects improves continuation rates."
+  },
+  {
+    "region": "Nairobi",
+    "method": "implant",
+    "discontinuation_reason": "access",
+    "text": "Implant removal requires a trained provider. Women in informal settlements cite transport cost and long clinic waits as barriers to removal when experiencing heavy bleeding."
+  },
+  {
+    "region": "Kenya",
+    "method": "coc",
+    "discontinuation_reason": "supply",
+    "text": "Reversing the stall in fertility decline: stock-outs of combined oral contraceptives at public facilities were associated with method switching to condoms or discontinuation entirely in peri-urban Kenya."
+  },
+  {
+    "region": "Nairobi",
+    "method": "pop",
+    "discontinuation_reason": "none",
+    "text": "Unwanted pregnancy in Nairobi slums: progestogen-only pills were preferred among breastfeeding mothers who feared combined pill effects on milk supply, though daily adherence remained challenging."
+  },
+  {
+    "region": "Nairobi",
+    "method": "iud_copper",
+    "discontinuation_reason": "pain",
+    "text": "Copper IUD uptake is low in some slum clinics due to pain during insertion and myths about IUDs and infertility. Peer educator programs increased acceptance when side effects were explained."
+  },
+  {
+    "region": "Kenya",
+    "method": "condom",
+    "discontinuation_reason": "partner_objection",
+    "text": "Male partner objection remains a leading reason for contraceptive non-use among young women in Nairobi informal settlements, even when methods are available at no cost."
+  },
+  {
+    "region": "Uganda",
+    "method": "injectable",
+    "discontinuation_reason": "side_effects",
+    "text": "In Kampala peri-urban areas, weight gain and amenorrhea were commonly reported reasons for injectable discontinuation; women often switched to implants or pills without clinic guidance."
+  },
+  {
+    "region": "Kenya",
+    "method": "emergency",
+    "discontinuation_reason": "none",
+    "text": "APHRC findings note emergency contraception is underused in slums despite high unwanted pregnancy rates, largely due to lack of awareness and stigma at pharmacy level."
+  }
+]

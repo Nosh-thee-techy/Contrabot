@@ -1,0 +1,6 @@
+name,district,lat,lng,services,phone
+Kampala City Clinic,Kampala,0.3476,32.5825,"Family planning, HIV care",+256712345001
+Nakawa Health Centre,Kampala,0.3280,32.6090,"Family planning, ANC",+256712345002
+Mbarara Regional Hospital,Mbarara,-0.6072,30.6545,"Family planning, Surgery",+256712345003
+Gulu Main Clinic,Gulu,2.7746,32.2980,"Family planning, Immunization",+256712345004
+Jinja Municipal Health Centre,Jinja,0.4244,33.2041,"Family planning, STI",+256712345005
