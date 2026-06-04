@@ -145,3 +145,5 @@ docker-compose.yml
 | 7 Web chat | Done |
 | 8 CHW dashboard | Done |
 | 9 Testing | pytest suite; device testing manual |
+
+faruoq: working on the bot
