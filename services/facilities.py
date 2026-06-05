@@ -1,9 +1,40 @@
+import math
 from typing import Optional
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from services.database import Facility, Outcome, get_db
+
+
+def find_facilities_by_coords(lat: float, lng: float, limit: int = 3) -> list[dict]:
+    db: Session = get_db()
+    try:
+        facilities = db.query(Facility).filter(Facility.lat.isnot(None), Facility.lng.isnot(None)).all()
+        if not facilities:
+            return []
+        
+        # simple distance calculation
+        def dist(f):
+            return math.sqrt((f.lat - lat) ** 2 + (f.lng - lng) ** 2)
+            
+        facilities.sort(key=dist)
+        return [
+            {
+                "name": f.name,
+                "district": f.district,
+                "country": f.country,
+                "phone": f.phone or "N/A",
+                "services": f.services or "Family planning",
+                "lat": f.lat,
+                "lng": f.lng,
+            }
+            for f in facilities[:limit]
+        ]
+    except Exception:
+        return []
+    finally:
+        db.close()
 
 
 def find_nearest_facilities(district: str, limit: int = 3, country: Optional[str] = None) -> list[dict]:
