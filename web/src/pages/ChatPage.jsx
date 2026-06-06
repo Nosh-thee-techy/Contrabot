@@ -36,7 +36,7 @@ const HEALTH_OPTIONS = [
 
 export default function ChatPage() {
   const prefill = useAppStore((s) => s.prefillChat);
-  const setPrefill = useAppStore((s) => s.setPrefill);
+  const setPrefillChat = useAppStore((s) => s.setPrefillChat);
   const { flowState, messages, profile, recommendations, loading, loadingStep, reset, doctorState, setDoctor } = useChatStore();
   const { handleQuickReply, initWelcome } = useChatFlow();
   const [input, setInput] = useState("");
@@ -55,7 +55,7 @@ export default function ChatPage() {
         text: "Which method are you using?",
         timestamp: new Date().toLocaleTimeString(),
       });
-      setPrefill(null);
+      setPrefillChat(null);
     }
   }, []);
 
