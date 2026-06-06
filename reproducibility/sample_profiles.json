@@ -1,0 +1,59 @@
+[
+  {
+    "input": {
+      "age_group": "18-24",
+      "ever_pregnant": false,
+      "breastfeeding": false,
+      "breastfeeding_infant_months": null,
+      "health_flags": [],
+      "pregnancy_goal": "avoid_long_term",
+      "partner_situation": "regular_partner",
+      "prior_contraception": "none",
+      "access": "clinic_accessible",
+      "discretion_needed": false
+    },
+    "expected_output": {
+      "eliminated_methods": [],
+      "top_recommendations": ["hormonal_implant", "copper_iud"],
+      "safety_flags": []
+    }
+  },
+  {
+    "input": {
+      "age_group": "25-34",
+      "ever_pregnant": true,
+      "breastfeeding": true,
+      "breastfeeding_infant_months": 3,
+      "health_flags": [],
+      "pregnancy_goal": "spacing_1_3_years",
+      "partner_situation": "regular_partner",
+      "prior_contraception": "none",
+      "access": "clinic_accessible",
+      "discretion_needed": false
+    },
+    "expected_output": {
+      "eliminated_methods": ["COC", "combined_patch"],
+      "top_recommendations": ["POP", "copper_iud", "DMPA"],
+      "safety_flags": ["breastfeeding_under_6_months_COC_contraindicated"]
+    }
+  },
+  {
+    "input": {
+      "age_group": "35-44",
+      "ever_pregnant": true,
+      "breastfeeding": false,
+      "health_flags": ["migraines_with_aura", "hypertension"],
+      "pregnancy_goal": "avoid_long_term",
+      "partner_situation": "no_partner",
+      "prior_contraception": "stopped_side_effects",
+      "prior_method": "COC",
+      "access": "pharmacy_only",
+      "discretion_needed": false
+    },
+    "expected_output": {
+      "eliminated_methods": ["COC", "combined_patch", "combined_ring"],
+      "top_recommendations": ["POP", "condoms", "copper_iud"],
+      "safety_flags": ["migraines_with_aura_combined_hormonal_contraindicated", "hypertension_COC_contraindicated"]
+    }
+  }
+]

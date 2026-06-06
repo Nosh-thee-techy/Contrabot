@@ -125,3 +125,41 @@ def screen_methods(profile: UserProfile) -> SafetyScreenResult:
         warnings=warnings,
         eligible=eligible,
     )
+
+
+def safety_screen(user_input: dict) -> list[dict]:
+    """Safety screen function for compatibility with the reproducibility package."""
+    eliminated = []
+
+    # 1. Breastfeeding < 6 months postpartum contraindicates combined hormonal methods
+    is_breastfeeding = user_input.get("breastfeeding", False)
+    infant_months = user_input.get("breastfeeding_infant_months")
+    if is_breastfeeding and infant_months is not None and infant_months < 6:
+        eliminated.append({"method": "COC", "reason": "breastfeeding_under_6_months_COC_contraindicated"})
+        eliminated.append({"method": "combined_patch", "reason": "breastfeeding_under_6_months_patch_contraindicated"})
+
+    # 2. Migraines with aura or hypertension contraindicates combined hormonal methods
+    health_flags = user_input.get("health_flags", [])
+    if "migraines_with_aura" in health_flags or "hypertension" in health_flags:
+        if "migraines_with_aura" in health_flags:
+            eliminated.append({"method": "COC", "reason": "migraines_with_aura_combined_hormonal_contraindicated"})
+            eliminated.append({"method": "combined_patch", "reason": "migraines_with_aura_combined_hormonal_contraindicated"})
+            eliminated.append({"method": "combined_ring", "reason": "migraines_with_aura_combined_hormonal_contraindicated"})
+        if "hypertension" in health_flags:
+            if not any(e["method"] == "COC" for e in eliminated):
+                eliminated.append({"method": "COC", "reason": "hypertension_COC_contraindicated"})
+            if not any(e["method"] == "combined_patch" for e in eliminated):
+                eliminated.append({"method": "combined_patch", "reason": "hypertension_patch_contraindicated"})
+            if not any(e["method"] == "combined_ring" for e in eliminated):
+                eliminated.append({"method": "combined_ring", "reason": "hypertension_ring_contraindicated"})
+
+    # Deduplicate keeping order
+    unique_eliminated = []
+    seen = set()
+    for item in eliminated:
+        if item["method"] not in seen:
+            seen.add(item["method"])
+            unique_eliminated.append(item)
+
+    return unique_eliminated
+

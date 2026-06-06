@@ -17,10 +17,35 @@ export const useChatStore = create((set, get) => ({
   loadingStep: 0,
   sessionId: `web-${Date.now()}`,
   sideEffectFlow: null,
+  _talkingTimeout: null,
 
-  addMessage: (msg) => set((s) => ({ messages: [...s.messages, { ...msg, id: `${Date.now()}-${Math.random()}` }] })),
+  doctorState: {
+    chosen: null,        // 'amara' | 'kofi'
+    isTalking: false,
+    currentAnimation: "Idle",
+    chatState: 0,
+  },
 
-  setFlowState: (flowState) => set({ flowState }),
+  setDoctor: (name) => set((s) => ({ doctorState: { ...s.doctorState, chosen: name } })),
+  setTalking: (bool) => set((s) => ({ doctorState: { ...s.doctorState, isTalking: bool } })),
+  setChatState: (n) => set((s) => ({ doctorState: { ...s.doctorState, chatState: n } })),
+
+  addMessage: (msg) => {
+    set((s) => ({ messages: [...s.messages, { ...msg, id: `${Date.now()}-${Math.random()}` }] }));
+    if (msg.role === "bot") {
+      get().setTalking(true);
+      if (get()._talkingTimeout) clearTimeout(get()._talkingTimeout);
+      const timeout = setTimeout(() => {
+        get().setTalking(false);
+      }, 2500);
+      set({ _talkingTimeout: timeout });
+    }
+  },
+
+  setFlowState: (flowState) => {
+    set({ flowState });
+    get().setChatState(flowState);
+  },
 
   updateProfile: (patch) => set((s) => ({ profile: { ...s.profile, ...patch } })),
 
@@ -30,7 +55,8 @@ export const useChatStore = create((set, get) => ({
 
   setSideEffectFlow: (sideEffectFlow) => set({ sideEffectFlow }),
 
-  reset: () =>
+  reset: () => {
+    if (get()._talkingTimeout) clearTimeout(get()._talkingTimeout);
     set({
       flowState: 0,
       messages: [],
@@ -40,5 +66,13 @@ export const useChatStore = create((set, get) => ({
       loadingStep: 0,
       sessionId: `web-${Date.now()}`,
       sideEffectFlow: null,
-    }),
+      doctorState: {
+        chosen: null,
+        isTalking: false,
+        currentAnimation: "Idle",
+        chatState: 0,
+      },
+      _talkingTimeout: null,
+    });
+  },
 }));

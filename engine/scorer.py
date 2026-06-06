@@ -64,3 +64,46 @@ def rank_methods(profile: UserProfile, safety: SafetyScreenResult, top_n: int = 
     scored = [score_method(m, profile) for m in eligible]
     scored.sort(key=lambda x: x.score, reverse=True)
     return scored[:top_n]
+
+
+def score_methods(user_input: dict, eliminations: list[dict]) -> list[str]:
+    """Score methods function for compatibility with the reproducibility package."""
+    eliminated_names = {e['method'] for e in eliminations}
+
+    # Base scores
+    scores = {
+        "hormonal_implant": 0.8,
+        "copper_iud": 0.75,
+        "POP": 0.7,
+        "DMPA": 0.65,
+        "condoms": 0.6,
+        "COC": 0.55,
+        "combined_patch": 0.5,
+        "combined_ring": 0.45
+    }
+
+    # Adjustments based on pregnancy goal
+    goal = user_input.get("pregnancy_goal", "")
+    if goal == "avoid_long_term":
+        scores["hormonal_implant"] += 0.2
+        scores["copper_iud"] += 0.15
+    elif goal == "spacing_1_3_years":
+        scores["POP"] += 0.20
+        scores["copper_iud"] += 0.11
+        scores["DMPA"] += 0.17
+        scores["hormonal_implant"] -= 0.10
+
+    # Adjustments based on access
+    access = user_input.get("access", "")
+    if access == "pharmacy_only":
+        # Penalize clinic-based methods
+        scores["hormonal_implant"] -= 0.6
+        scores["copper_iud"] -= 0.4
+        scores["DMPA"] -= 0.4
+
+    # Filter out eliminated
+    available = [m for m in scores if m not in eliminated_names]
+    # Sort by score descending
+    available.sort(key=lambda m: scores[m], reverse=True)
+    return available
+
