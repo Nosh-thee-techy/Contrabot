@@ -15,6 +15,7 @@ else:
 # Lazy initialization: clients will be created on first use
 _gemini_client = None
 _openai_client = None
+_groq_client = None
 
 
 def _get_gemini_client():
@@ -56,6 +57,26 @@ def _get_openai_client():
 # Anthropic key (optional)
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
+# Groq key (preferred)
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+
+def _get_groq_client():
+    """Lazy-load Groq client."""
+    global _groq_client
+    if _groq_client is not None:
+        return _groq_client
+
+    key = os.getenv("GROQ_API_KEY")
+    if not key:
+        return None
+    try:
+        from groq import Groq
+        _groq_client = Groq(api_key=key)
+        return _groq_client
+    except Exception:
+        return None
+
 
 def _anthropic_completion(messages, model=None, max_tokens=500):
     """Simple Anthropic completion via REST using Messages API."""
@@ -91,38 +112,64 @@ def _anthropic_embeddings(texts, model=None):
 
 
 def chat_completion(messages, model=None, temperature=0.7, max_tokens=500):
-    """Return a text completion using Gemini (preferred) or OpenAI.
+    """Return a text completion using Groq (preferred) then Anthropic then Gemini then OpenAI."""
+    # Groq preferred (fastest inference)
+    groq_client = _get_groq_client()
+    if groq_client:
+        try:
+            groq_model = model or os.getenv("GROQ_CHAT_MODEL", "llama-3.1-70b-versatile")
+            response = groq_client.chat.completions.create(
+                model=groq_model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            text = (response.choices[0].message.content or "").strip()
+            if text:
+                return text
+        except Exception:
+            pass
 
-    `messages` is a list of dicts like OpenAI chat messages. For Gemini we
-    concatenate messages into a single prompt.
-    """
-    # Anthropic preferred
-    anthropic_resp = _anthropic_completion(messages, model=model, max_tokens=max_tokens)
+    # Anthropic next
+    anthropic_resp = _anthropic_completion(
+        messages,
+        model=model or os.getenv("ANTHROPIC_CHAT_MODEL"),
+        max_tokens=max_tokens,
+    )
     if anthropic_resp:
         return anthropic_resp
 
     # Gemini next
     gc = _get_gemini_client()
     if gc:
-        prompt = "\n".join([m.get("content", "") for m in messages])
-        model = model or os.getenv("GEMINI_CHAT_MODEL", "gemini-1.5-mini")
-        resp = gc.models.generate_content(model=model, contents=prompt)
-        # Response text is available as `text`
-        return getattr(resp, "text", str(resp))
+        try:
+            prompt = "\n".join([m.get("content", "") for m in messages])
+            gemini_model = model or os.getenv("GEMINI_CHAT_MODEL", "gemini-1.5-mini")
+            resp = gc.models.generate_content(model=gemini_model, contents=prompt)
+            text = (getattr(resp, "text", str(resp)) or "").strip()
+            if text:
+                return text
+        except Exception:
+            pass
 
     # OpenAI fallback
     oc = _get_openai_client()
     if oc:
-        model = model or "gpt-3.5-turbo"
-        response = oc.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-        return response.choices[0].message["content"].strip()
+        try:
+            openai_model = model or os.getenv("OPENAI_CHAT_MODEL", "gpt-4o-mini")
+            response = oc.chat.completions.create(
+                model=openai_model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            text = (response.choices[0].message.content or "").strip()
+            if text:
+                return text
+        except Exception:
+            pass
 
-    raise RuntimeError("No LLM client configured. Set GOOGLE_API_KEY or OPENAI_API_KEY in .env")
+    raise RuntimeError("No LLM client configured or all configured providers returned an empty response.")
 
 
 def _fallback_embeddings(texts, dim=384):
@@ -206,7 +253,7 @@ def get_embeddings(texts, model=None):
     if oc:
         model = model or "text-embedding-3-small"
         response = oc.embeddings.create(model=model, input=texts)
-        return [item["embedding"] for item in response["data"]]
+        return [item.embedding for item in response.data]
 
     # Final fallback: deterministic hash-based embeddings (no API required)
     return _fallback_embeddings(texts)

@@ -79,7 +79,15 @@ def format_facilities_message(facilities: list[dict], max_chars: int = 160) -> s
         return "No clinics found. Ask your CHW or dial local health line."
     parts = []
     for i, f in enumerate(facilities[:2], 1):
-        parts.append(f"{i}.{f['name']} ({f['district']}) {f['phone']}")
+        clinic_info = f"{i}. {f['name']} ({f['district']}) {f['phone']}"
+        if max_chars > 200:
+            if f.get("lat") is not None and f.get("lng") is not None:
+                gmaps = f"https://www.google.com/maps/search/?api=1&query={f['lat']},{f['lng']}"
+            else:
+                q = f"{f['name']} {f['district']}".replace(" ", "+")
+                gmaps = f"https://www.google.com/maps/search/?api=1&query={q}"
+            clinic_info += f" Map: {gmaps}"
+        parts.append(clinic_info)
     msg = "Nearest clinics: " + " | ".join(parts)
     return msg[:max_chars]
 

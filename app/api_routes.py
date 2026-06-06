@@ -40,6 +40,28 @@ PREF_MAP = {
 }
 
 
+def _fallback_chat_reply(message: str) -> str:
+    text = message.lower()
+    if "breast" in text:
+        return (
+            "If you are breastfeeding, options that are often considered include lactational amenorrhea "
+            "in the first 6 months when strict criteria are met, progestogen-only pills, implants, injectables, "
+            "IUDs, and condoms. A clinic or CHW should confirm what is safest for your health history."
+        )
+    if "side effect" in text or "bleeding" in text:
+        return (
+            "Some side effects, such as irregular bleeding or mild headaches, can happen with hormonal methods "
+            "and may settle with time. Heavy bleeding, severe pain, chest pain, fainting, or symptoms that worry "
+            "you should be checked at a clinic promptly."
+        )
+    if "clinic" in text or "facility" in text:
+        return "Use the clinic finder to look for nearby family planning services, or speak with a CHW for referral support."
+    return (
+        "I can help with contraception options, side effects, breastfeeding considerations, and clinic access. "
+        "For a personalized recommendation, start the guided consultation and answer the five quick questions."
+    )
+
+
 def _to_user_profile(body: WebRecommendRequest) -> UserProfile:
     health_risk = any(f in RED_FLAG_FLAGS for f in body.health_flags)
     clinic_access = body.access == "clinic"
@@ -95,7 +117,7 @@ def api_chat(body: WebChatRequest):
             temperature=0.6,
         )
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        reply = _fallback_chat_reply(body.message)
 
     quick = []
     if body.context and body.context.get("mode") == "side_effects":

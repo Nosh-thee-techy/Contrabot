@@ -42,6 +42,8 @@ def startup():
             base = Path(__file__).parent.parent / "data" / "facilities"
             import_facilities_csv(base / "kenya_facilities.csv", "Kenya")
             import_facilities_csv(base / "uganda_facilities.csv", "Uganda")
+    except Exception as exc:
+        print(f"Facility seed skipped: {exc}")
     finally:
         db.close()
 

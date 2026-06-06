@@ -108,7 +108,7 @@ async def test_verify_whatsapp_webhook_success():
     with patch("channels.whatsapp.WHATSAPP_VERIFY_TOKEN", "test_token"):
         resp = await verify_whatsapp_webhook(req)
         assert resp.status_code == 200
-        assert json.loads(resp.body) == 12345
+        assert resp.body == b"12345"
 
 @pytest.mark.asyncio
 async def test_verify_whatsapp_webhook_failure():
@@ -250,6 +250,54 @@ async def test_handle_whatsapp_webhook_language_list(mock_send):
 
 @pytest.mark.asyncio
 @patch("channels.whatsapp._send_payload", new_callable=AsyncMock)
+async def test_handle_whatsapp_webhook_select_language(mock_send):
+    mock_send.return_value = True
+    # Establish session
+    session_store.set("254700000000", {
+        "phone_number": "254700000000",
+        "channel": "whatsapp",
+        "stage": "language",
+        "language": "english",
+        "profile": {}
+    }, "whatsapp")
+    
+    payload = {
+        "entry": [{
+            "changes": [{
+                "value": {
+                    "messages": [{
+                        "id": "msg_lang_select_1",
+                        "from": "254700000000",
+                        "type": "interactive",
+                        "interactive": {
+                            "type": "list_reply",
+                            "list_reply": {
+                                "id": "1",
+                                "title": "English"
+                            }
+                        }
+                    }]
+                }
+            }]
+        }]
+    }
+    req = make_mock_request("POST", json.dumps(payload).encode())
+    resp = await handle_whatsapp_webhook(req)
+    assert resp.status_code == 200
+    
+    # Name prompt should be sent (after marking read)
+    assert mock_send.call_count == 2
+    sent_payload = mock_send.call_args_list[1][0][1]
+    assert sent_payload["type"] == "text"
+    assert "What should we call you" in sent_payload["text"]["body"]
+    
+    # Session state should be updated to stage "name" and language "english"
+    sess = session_store.get("254700000000", "whatsapp")
+    assert sess["stage"] == "name"
+    assert sess["language"] == "english"
+
+@pytest.mark.asyncio
+@patch("channels.whatsapp._send_payload", new_callable=AsyncMock)
 async def test_handle_whatsapp_webhook_location_lookup(mock_send):
     mock_send.return_value = True
     # Establish session awaiting facility
@@ -332,3 +380,117 @@ async def test_handle_whatsapp_webhook_chat_mode(mock_chat, mock_send):
         assert mock_send.call_count == 2
         sent_payload = mock_send.call_args_list[1][0][1]
         assert sent_payload["text"]["body"] == "This is an AI response about side effects."
+
+
+@pytest.mark.asyncio
+@patch("channels.whatsapp._send_payload", new_callable=AsyncMock)
+async def test_handle_whatsapp_webhook_select_sheng(mock_send):
+    mock_send.return_value = True
+    session_store.set("254700000000", {
+        "phone_number": "254700000000",
+        "channel": "whatsapp",
+        "stage": "language",
+        "language": "english",
+        "profile": {}
+    }, "whatsapp")
+    
+    payload = {
+        "entry": [{
+            "changes": [{
+                "value": {
+                    "messages": [{
+                        "id": "msg_sheng_select",
+                        "from": "254700000000",
+                        "type": "interactive",
+                        "interactive": {
+                            "type": "list_reply",
+                            "list_reply": {
+                                "id": "6",
+                                "title": "Sheng"
+                            }
+                        }
+                    }]
+                }
+            }]
+        }]
+    }
+    req = make_mock_request("POST", json.dumps(payload).encode())
+    resp = await handle_whatsapp_webhook(req)
+    assert resp.status_code == 200
+    
+    assert mock_send.call_count == 2
+    sent_payload = mock_send.call_args_list[1][0][1]
+    assert "Unaitwa nani mbogi" in sent_payload["text"]["body"]
+
+
+@pytest.mark.asyncio
+@patch("channels.whatsapp._send_payload", new_callable=AsyncMock)
+async def test_handle_whatsapp_webhook_male_branching(mock_send):
+    mock_send.return_value = True
+    session_store.set("254700000000", {
+        "phone_number": "254700000000",
+        "channel": "whatsapp",
+        "stage": "gender",
+        "language": "english",
+        "profile": {"name": "Bob"}
+    }, "whatsapp")
+    
+    payload = {
+        "entry": [{
+            "changes": [{
+                "value": {
+                    "messages": [{
+                        "id": "msg_gender_select",
+                        "from": "254700000000",
+                        "type": "interactive",
+                        "interactive": {
+                            "type": "button_reply",
+                            "button_reply": {
+                                "id": "male",
+                                "title": "Male"
+                            }
+                        }
+                    }]
+                }
+            }]
+        }]
+    }
+    req = make_mock_request("POST", json.dumps(payload).encode())
+    resp = await handle_whatsapp_webhook(req)
+    assert resp.status_code == 200
+    
+    assert mock_send.call_count == 2
+    sent_payload = mock_send.call_args_list[1][0][1]
+    assert "Enter your age" in sent_payload["text"]["body"]
+    
+    sess = session_store.get("254700000000", "whatsapp")
+    assert sess["stage"] == "age"
+    assert sess["profile"]["gender"] == "male"
+    
+    payload_age = {
+        "entry": [{
+            "changes": [{
+                "value": {
+                    "messages": [{
+                        "id": "msg_age_select",
+                        "from": "254700000000",
+                        "type": "text",
+                        "text": {"body": "25"}
+                    }]
+                }
+            }]
+        }]
+    }
+    mock_send.reset_mock()
+    req_age = make_mock_request("POST", json.dumps(payload_age).encode())
+    resp_age = await handle_whatsapp_webhook(req_age)
+    assert resp_age.status_code == 200
+    
+    # Access prompt should be sent next (skipping breastfeeding, health flags, preference!)
+    assert mock_send.call_count == 2
+    sent_payload_age = mock_send.call_args_list[1][0][1]
+    assert sent_payload_age["interactive"]["type"] == "button"
+    assert "visit a clinic" in sent_payload_age["interactive"]["body"]["text"]
+    
+    sess_age = session_store.get("254700000000", "whatsapp")
+    assert sess_age["stage"] == "access"

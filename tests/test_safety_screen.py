@@ -29,3 +29,18 @@ def test_no_clinic_access_penalizes_clinical_methods():
     result = screen_methods(profile)
     assert "implant" in result.eliminated
     assert "condom" in result.eligible
+
+
+def test_not_breastfeeding_eliminates_lam():
+    profile = UserProfile(age=25, breastfeeding=False, channel="web")
+    result = screen_methods(profile)
+    assert "lam" in result.eliminated
+
+
+def test_male_eliminates_female_contraceptives():
+    profile = UserProfile(age=25, gender="male", channel="web")
+    result = screen_methods(profile)
+    assert "coc" in result.eliminated
+    assert "pop" in result.eliminated
+    assert "implant" in result.eliminated
+    assert "condom" in result.eligible

@@ -8,7 +8,17 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://contrabot:contrabot@localhost:5432/contrabot")
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+try:
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+    # Test connection to check if DB is running
+    with engine.connect() as conn:
+        pass
+except Exception as exc:
+    print(f"PostgreSQL connection failed ({DATABASE_URL}): {exc}")
+    print("Falling back to local SQLite database: contrabot.db")
+    DATABASE_URL = "sqlite:///contrabot.db"
+    engine = create_engine(DATABASE_URL)
+
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 Base = declarative_base()
 

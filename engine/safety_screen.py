@@ -16,6 +16,22 @@ def _mec_table(profile: UserProfile) -> dict[ContraceptiveMethod, tuple[int, str
     for method in ALL_METHODS:
         categories[method] = (1, "No restriction for this profile.")
 
+    if profile.gender == "male":
+        for female_method in (
+            ContraceptiveMethod.COC,
+            ContraceptiveMethod.POP,
+            ContraceptiveMethod.INJECTABLE,
+            ContraceptiveMethod.IMPLANT,
+            ContraceptiveMethod.IUD_COPPER,
+            ContraceptiveMethod.IUD_LNG,
+            ContraceptiveMethod.LAM,
+            ContraceptiveMethod.EMERGENCY,
+        ):
+            categories[female_method] = (
+                4,
+                "This method is for females only.",
+            )
+
     if profile.health_risk:
         categories[ContraceptiveMethod.COC] = (
             4,
@@ -34,6 +50,11 @@ def _mec_table(profile: UserProfile) -> dict[ContraceptiveMethod, tuple[int, str
         categories[ContraceptiveMethod.LAM] = (
             1,
             "LAM is suitable if fully breastfeeding, amenorrheic, and baby under 6 months.",
+        )
+    else:
+        categories[ContraceptiveMethod.LAM] = (
+            4,
+            "Lactational Amenorrhea Method (LAM) is only possible when actively breastfeeding.",
         )
 
     if profile.age < 18:

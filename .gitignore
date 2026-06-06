@@ -15,3 +15,6 @@ chw/dist/
 frontend/dist/
 data/chromadb/*.sqlite3
 *.pyc
+*.log
+contrabot.db
+.whatsapp_verify_token.local

@@ -7,8 +7,8 @@ import hashlib
 from typing import Any, Optional
 
 import httpx
-from fastapi import Request
-from fastapi.responses import JSONResponse
+from fastapi import Request, Response
+from fastapi.responses import JSONResponse, PlainTextResponse
 from langdetect import detect, LangDetectException
 
 from channels.intake import LANGUAGE_LABELS, get_prompt_for_stage, new_session, process_intake_input
@@ -216,6 +216,7 @@ async def send_language_list(phone_number: str) -> bool:
                 {"id": "3", "title": "Luganda", "description": "Londa Oluganda"},
                 {"id": "4", "title": "French", "description": "Choisir le Français"},
                 {"id": "5", "title": "Kinyarwanda", "description": "Hitamo Ikinyarwanda"},
+                {"id": "6", "title": "Sheng", "description": "Chagua Sheng"},
             ]
         }
     ]
@@ -336,7 +337,7 @@ async def handle_whatsapp_webhook(request: Request) -> JSONResponse:
             continue
 
         # Handle welcome button response
-        if body.lower() in ("start", "1") and session.get("stage") == "language":
+        if body.lower() == "start" and session.get("stage") == "language":
             await send_language_list(phone_number)
             continue
 
@@ -427,32 +428,58 @@ async def handle_whatsapp_webhook(request: Request) -> JSONResponse:
         session_store.set(session_id, session, CHANNEL, ttl=1800)
 
         stage = session.get("stage")
-        if stage in ("breastfeeding", "health_flags", "preference", "access"):
-            prompts = {
-                "breastfeeding": ("Breastfeeding under 6 months?", [("breastfeeding_yes", "Yes"), ("breastfeeding_no", "No")]),
-                "health_flags": ("Health risks (HTN/migraine/clots)?", [("health_yes", "Yes"), ("health_no", "No")]),
-                "preference": ("Your preference?", [("daily", "Daily pill"), ("long_acting", "Set-forget")]),
-                "access": ("Clinic access?", [("access_yes", "Yes"), ("access_no", "No")]),
-            }
+        if stage in ("gender", "breastfeeding", "health_flags", "preference", "access"):
+            lang = session.get("language", "english")
+            if lang == "sheng":
+                prompts = {
+                    "gender": ("Jinsia yako ni gani msee?", [("female", "Dem"), ("male", "Chali")]),
+                    "breastfeeding": ("Uko na mtoi ananyonya chini ya miezi sita?", [("breastfeeding_yes", "Ndio"), ("breastfeeding_no", "Zii")]),
+                    "health_flags": ("Uko na pressure, kichwa kuuma, au shida ya damu kuganda?", [("health_yes", "Ndio"), ("health_no", "Zii")]),
+                    "preference": ("Unataka chapo ya kila siku (vidonge) ama ile ya muda mrefu?", [("daily", "Kila siku"), ("long_acting", "Muda mrefu")]),
+                    "access": ("Unaweza fika kliniki kupata huduma?", [("access_yes", "Ndio"), ("access_no", "Zii")]),
+                }
+            elif lang == "kiswahili":
+                prompts = {
+                    "gender": ("Je, jinsia yako ni gani?", [("female", "Kike"), ("male", "Kiume")]),
+                    "breastfeeding": ("Je, unanyonyesha mtoto aliye chini ya miezi 6?", [("breastfeeding_yes", "Ndio"), ("breastfeeding_no", "La")]),
+                    "health_flags": ("Je, una shinikizo la damu, maumivu ya kichwa, au historia ya kuganda damu?", [("health_yes", "Ndio"), ("health_no", "La")]),
+                    "preference": ("Je, unapendelea vidonge vya kila siku au njia ya muda mrefu?", [("daily", "Kila siku"), ("long_acting", "Muda mrefu")]),
+                    "access": ("Je, unaweza kutembelea kliniki kwa huduma?", [("access_yes", "Ndio"), ("access_no", "La")]),
+                }
+            else:
+                prompts = {
+                    "gender": ("What is your gender?", [("female", "Female"), ("male", "Male")]),
+                    "breastfeeding": ("Breastfeeding baby under 6 months?", [("breastfeeding_yes", "Yes"), ("breastfeeding_no", "No")]),
+                    "health_flags": ("Hypertension, migraine w/ aura, or blood clots?", [("health_yes", "Yes"), ("health_no", "No")]),
+                    "preference": ("Prefer daily pill or set-and-forget?", [("daily", "Daily pill"), ("long_acting", "Set-and-forget")]),
+                    "access": ("Can you visit a clinic for FP services?", [("access_yes", "Yes"), ("access_no", "No")]),
+                }
             if stage in prompts:
                 text, buttons = prompts[stage]
                 await send_buttons(phone_number, text, buttons)
                 continue
 
         if session.get("awaiting_facility"):
-            await send_buttons(phone_number, reply, [("facility_yes", "Find clinic"), ("facility_no", "Done")])
+            lang = session.get("language", "english")
+            if lang == "sheng":
+                facility_buttons = [("facility_yes", "Nionyeshe kliniki"), ("facility_no", "Zii, niko sawa")]
+            elif lang == "kiswahili":
+                facility_buttons = [("facility_yes", "Tafuta kliniki"), ("facility_no", "La, nimekamilisha")]
+            else:
+                facility_buttons = [("facility_yes", "Find clinic"), ("facility_no", "Done")]
+            await send_buttons(phone_number, reply, facility_buttons)
         else:
             await send_text(phone_number, reply)
 
     return JSONResponse({"status": "received"}, status_code=200)
 
-async def verify_whatsapp_webhook(request: Request) -> JSONResponse:
+async def verify_whatsapp_webhook(request: Request) -> Response:
     params = request.query_params
     mode = params.get("hub.mode")
     token = params.get("hub.verify_token")
     challenge = params.get("hub.challenge")
 
     if mode == "subscribe" and verify_webhook_token(token):
-        return JSONResponse(content=int(challenge), status_code=200)
+        return PlainTextResponse(content=challenge, status_code=200)
 
     return JSONResponse({"error": "Verification failed"}, status_code=403)
