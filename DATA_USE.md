@@ -1,63 +1,71 @@
 # Data Use and Governance Documentation
 **ContraBot — Multilingual AI Contraception Counselor**  
-*Challenge: AI for Reproductive Health in Africa Innovation Challenge (DSA / APHRC)*  
+*Challenge: AI for Reproductive Health in Africa Innovation Challenge (DASSA / APHRC)*  
 *Team: RKO*  
 *Date: July 2026*  
 
 ---
 
-## 1. Overview of Datasets Utilized
+## A. Data Sources (Data Inventory)
 
-ContraBot ingests and processes four primary datasets to calibrate its scoring models, populate its semantic vector search (RAG), and structure its clinical decision trees:
+ContraBot utilizes a combination of challenge-specific microdata and public clinical/geospatial datasets to calibrate recommendation scores, enforce medical eligibility rules, and provide local clinic referrals.
 
-| Dataset | Provider / Source | License | Application in ContraBot |
-|---|---|---|---|
-| **WHO Medical Eligibility Criteria (5th Ed.)** | World Health Organization | CC BY-NC-SA 3.0 IGO | Ground truth for the safety screening rules and the primary RAG knowledge base. |
-| **Reversing the Stall in Fertility (Western Kenya)** | APHRC / Challenge Dataset | Challenge License | Calibration of regional method preference coefficients. |
-| **Unwanted Pregnancy in Nairobi Slums** | APHRC / Challenge Dataset | Challenge License | User profile calibration, barrier modeling, and clinic search radius optimization. |
-| **CHV Decision-Support App (Nairobi)** | APHRC / Challenge Dataset | Challenge License | Structuring the CHW dashboard KPI panels and referral escalation logic. |
+### 1. Challenge Datasets (Sourced from the DASSA Platform)
+*   **Reversing the Stall in Fertility Decline — Western Kenya (APHRC / Challenge Dataset)**:
+    *   *Usage*: Calibrated regional contraceptive preferences and weighted coefficients in the scoring algorithm based on historical usage rates and documented barriers.
+*   **Unwanted Pregnancy in Nairobi Slums (APHRC / Challenge Dataset)**:
+    *   *Usage*: Parameterized discontinuation rates and method-mix prevalence. Used to weight side-effect aversion and optimize nearest-clinic search radius calculations for peri-urban informal settlements.
+*   **CHV Decision-Support App — Nairobi (Challenge Dataset)**:
+    *   *Usage*: Structured Community Health Worker (CHW) referral flows and dashboard indicator logic, tracking consultation acceptance and escalation timelines.
 
----
-
-## 2. Data Privacy & Ethical Compliance Framework
-
-Reproductive health counseling requires the highest standards of confidentiality and data security. ContraBot implements a "Privacy-by-Design" architecture across all interaction channels (USSD, WhatsApp, Web, CHW):
-
-### A. Strict De-identification of Encounters
-*   **No PII Storage**: Personal Identifiable Information (PII) such as phone numbers are never stored in plain text.
-*   **Cryptographic Hashing**: User phone numbers (`MSISDN`) coming from USSD or WhatsApp are immediately hashed using **bcrypt** (with a secure salt) upon intake. The system uses these hashes solely as session keys to prevent duplicate submissions, with no way to reverse them to reveal the original number.
-*   **Encounter Logs**: Consultation logs generated for regional health indicator analytics contain only:
-    *   Target district (e.g., "Nairobi")
-    *   Age bracket (e.g., "18–24")
-    *   Recommended method (e.g., "implant")
-    *   User acceptance status (Yes/No)
-    *   No names, raw locations, or timestamp correlation windows are persisted.
-
-### B. Session Lifecycle & Data Minimization
-*   **Ephemeral Session Cache**: Active session states (such as answers to the 5 intake questions) are stored temporarily in a **Redis Session Store** with an expiration time (TTL) of exactly **30 minutes**. 
-*   **Automatic Expiry**: Once the TTL expires, all intermediate user answers are permanently deleted from memory. Only the de-identified final recommendation outcome is recorded.
-
-### C. Informed Consent & Channel Opt-In
-*   **USSD Opt-in**: The USSD intake flow starts with an explicit language and privacy greeting screen. Proceeding to answer the age prompt constitutes active consent.
-*   **WhatsApp / Web Opt-in**: The greeting message outlines that counseling is anonymous, private, and automated, providing a clear warning/disclaimer before collecting any health flags.
+### 2. Public and Externally Sourced Datasets Integrated
+*   **WHO Medical Eligibility Criteria for Contraceptive Use (5th Edition, 2015/2016)**:
+    *   *Usage*: The primary clinical reference dataset. It maps 63 medical conditions (e.g., hypertension, migraines with aura, lactation stages) across 8 contraceptive methods to eligibility categories 1–4.
+*   **DHIS2 Facility Registry & GIS Coordinates (Kenya & Uganda Ministries of Health)**:
+    *   *Usage*: Exposes facility names, districts, geographic coordinates (lat/lng), and service availability metrics to drive the nearest-clinic locator service.
 
 ---
 
-## 3. RAG Knowledge Ingestion & Chunking Strategy
+## B. Data Management
 
-To ensure high-precision semantic retrieval and eliminate LLM hallucinations, source materials are ingested using a structured pipeline:
+### 1. Data Cleaning Procedures
+*   **WHO MEC Text Sanitization**: The WHO MEC PDF source document was parsed, removing headers, page number markers, and non-printable ASCII characters. Complex table footnotes were programmatically associated with their corresponding cell entries to avoid context fragmentation.
+*   **Geospatial Sanitization**: Facility coordinate data was filtered to eliminate null lat/lng records, coordinate inversion errors, and facilities located outside national borders. Missing service listings were populated with standard default tags.
+*   **Input Deduplication**: To handle message retries from SMS and Meta's WhatsApp API, incoming messages are checked against a Redis-backed cache storing `message_id` hashes with a 5-minute Time-To-Live (TTL).
 
-1.  **Parsing & Cleaning**: PyPDF2 extracts text from the WHO MEC reference document, removing headers, footers, and page numbers.
-2.  **Chunking Strategy**: Text is chunked using a sliding window approach:
-    *   **Chunk Size**: 512 tokens.
-    *   **Overlap**: 64 tokens (ensuring clinical context is not split across boundaries).
-3.  **Embeddings**: Chunks are embedded locally using the `all-MiniLM-L6-v2` model (or fallback hash-based vector dimensions if offline) and saved in a persistent **ChromaDB** vector store.
-4.  **Query Routing**: User queries are routed through a cosine similarity filter (top-k=2) to retrieve only relevant safety and side-effect context before generating prompts for the Claude/Gemini API.
+### 2. Feature Engineering Methods
+*   **Semantic Text Chunking & Embeddings**: Ingested WHO MEC text was chunked using LangChain’s `RecursiveCharacterTextSplitter` set to a **512-token window** with a **64-token overlap** to maintain clinical sentence context. Vector embeddings were generated using the `all-MiniLM-L6-v2` transformer model and stored in a local ChromaDB instance.
+*   **Profile Vectorization**: User responses gathered during USSD or chat intake are mapped to a simplified binary profile vector:
+    *   `age` (mapped to discrete integer threshold flags)
+    *   `breastfeeding` (boolean)
+    *   `health_risk` (boolean, consolidated from high blood pressure, clots, and migraine flags)
+    *   `preference` (mapped to `long_acting` or `daily` categories)
+    *   `clinic_access` (boolean)
+*   **Spatial Proximity Scoring**: Extracted user lat/lng inputs are queried against PostgreSQL using spatial Euclidean distance (`ST_DWithin` and `ST_Distance`) to identify and return the three nearest physical clinics.
+
+### 3. Data Quality Checks
+*   **Input Bounds Validation**: Frontend forms and backend endpoints utilize **Pydantic schemas** to enforce data limits (e.g., verifying age is between 10 and 55, and checking that health flag arrays only contain valid pre-defined strings).
+*   **RAGAS Evaluation Framework**: The retrieval-augmented generation (RAG) pipeline is continuously audited against an **80-question golden evaluation set** stratified by condition and language. Evaluated metrics include:
+    *   *Faithfulness* (ensuring no LLM hallucinations outside retrieved WHO MEC chunks)
+    *   *Answer Relevancy* (matching user intent)
+    *   *Context Precision* (relevancy of the top-k retrieved chunks)
+*   **Deterministic Safety Regression**: Automated unit tests (`pytest`) run on every code build to verify that critical safety rules are 100% deterministic (e.g., validating that selecting "male" always eliminates all female-specific hormonal methods).
 
 ---
 
-## 4. Storage & Security Architecture
+## C. Data Governance
 
-*   **Encryption at Rest**: Databases (PostgreSQL 15 and SQLite fallbacks) employ AES-256 encryption at rest.
-*   **TLS 1.3 Enforcement**: All API requests between the client app, CHW dashboard, and the FastAPI backend are encrypted in transit using TLS 1.3.
-*   **Open Science compliance**: In alignment with the Open Science Commitment, raw challenge microdata is **not** distributed or stored in public repositories. Only the ingestion scripts, code logic, and open-source embedding vectors are shared.
+### 1. Data Permissions and Licenses
+*   **WHO MEC**: Utilized in accordance with the World Health Organization's **CC BY-NC-SA 3.0 IGO** license (Non-commercial, Attribution, Share-Alike).
+*   **DASSA Challenge Datasets**: Used strictly for the innovation challenge under the DASSA challenge license terms. The raw microdata is kept entirely local, is not bundled within the codebase, and is **never** uploaded or redistributed to public repositories or LLM providers.
+*   **DHIS2 / GIS Registries**: Public government data directories used in compliance with open government data access policies.
+
+### 2. Privacy Protection Measures
+*   **Bcrypt Hashing**: Phone numbers (`MSISDN`) extracted from WhatsApp and USSD webhooks are immediately hashed using **bcrypt** before any lookup or session mapping occurs, preventing plain-text phone numbers from being exposed in system logs.
+*   **Ephemeral Session Caching**: User response profiles are cached temporarily in a **Redis store** with a strict **30-minute expiration TTL**. Once the consultation is complete or times out, the cache is completely purged.
+*   **De-identified Encounters**: No personally identifiable information (PII) is written to the database. Persistent encounter logs are restricted to anonymous indicators (e.g., district, chosen language, recommended method) for aggregated public health dashboard metrics.
+
+### 3. Compliance with Ethical Standards
+*   **Adolescent Safeguards**: In accordance with the **WHO Adolescent Job Aid**, any intake indicating an age under 18 automatically injects supportive, non-stigmatizing safe-messaging constraints into the LLM system prompt.
+*   **Clinical Boundaries & Disclaimers**: ContraBot is designed as a counseling support layer, not a prescribing tool. Every recommendation ends with a mandatory clinical disclaimer and direct guidance to consult a Community Health Worker (CHW) or clinic before starting any contraceptive method.
+*   **Language Inclusivity**: Developed and reviewed translation scripts with native speakers across Kiswahili, Luganda, Somali, Amharic, and Sheng to prevent clinical semantic drift and ensure culturally appropriate framing.
