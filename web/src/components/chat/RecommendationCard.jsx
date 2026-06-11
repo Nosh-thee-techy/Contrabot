@@ -1,73 +1,96 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, Info, Shield, Compass } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import { SEVERITY_STYLES } from "@/lib/constants";
 import { useAppStore } from "@/store/useAppStore";
 
-function MethodCard({ method }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Card className="p-4">
-      <h4 className="font-semibold text-ink">{method.name}</h4>
-      <p className="mt-1 text-sm text-muted">{method.description}</p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Badge variant="success">{Math.round(method.effectiveness_typical * 100)}% effective</Badge>
-        <Badge>{method.duration}</Badge>
-        <Badge variant="secondary">{method.hormonal_type}</Badge>
-        <Badge variant="muted">{method.access_required}</Badge>
-      </div>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        className="mt-3 flex items-center gap-1 text-sm font-medium text-primary"
-      >
-        What to expect {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-      </button>
-      {open && (
-        <ul className="mt-2 space-y-2">
-          {method.side_effects?.slice(0, 2).map((fx) => (
-            <li key={fx.name} className={`rounded-lg border px-3 py-2 text-xs ${SEVERITY_STYLES[fx.quadrant] || SEVERITY_STYLES.inform}`}>
-              <strong>{fx.name}</strong> — {fx.timeline}
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
-  );
-}
-
-export function RecommendationCard({ data }) {
+export function RecommendationCard({ data, onShowVisualization }) {
   const navigate = useNavigate();
   const setSelectedMethods = useAppStore((s) => s.setSelectedMethods);
 
   if (!data?.recommendations?.length) return null;
 
   return (
-    <div className="space-y-4 rounded-2xl border border-gray-100 bg-page p-4">
-      <div className="flex items-center gap-2">
-        <CheckCircle2 className="h-5 w-5 text-success" />
-        <h3 className="font-semibold text-ink">Your top matches</h3>
-        <Badge variant="success">WHO screened</Badge>
+    <div className="w-full bg-white/5 border-t-[3px] border-t-[#0E7A80] border-x border-b border-white/5 rounded-2xl p-5 shadow-2xl space-y-5">
+      {/* Heading */}
+      <div className="flex items-center justify-between border-b border-white/5 pb-3">
+        <div className="flex items-center gap-2">
+          <Shield className="h-5 w-5 text-teal-400" />
+          <h3 className="font-bold text-white text-base">Your Top Matches</h3>
+        </div>
+        <Badge variant="outline" className="bg-[#2E7D32]/10 border-[#2E7D32]/30 text-[#2E7D32] flex items-center gap-1 font-bold text-[10px]">
+          <Check className="h-3 w-3" /> WHO Screened
+        </Badge>
       </div>
-      {data.recommendations.map((m) => (
-        <MethodCard key={m.method} method={m} />
-      ))}
-      <div className="rounded-xl border border-accent/30 bg-accent/10 p-4 text-sm text-ink">
-        These are suggestions only. Please confirm with your nearest clinic or community health worker before starting any method.
+
+      {/* Recommended Methods Grid (Side-by-side on desktop, stacked on mobile) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {data.recommendations.map((m) => (
+          <div
+            key={m.method}
+            className="bg-[#0E7A80]/8 border border-[#0E7A80]/15 rounded-xl p-4 flex flex-col justify-between hover:border-[#0E7A80]/30 transition-all duration-300 shadow-md"
+          >
+            <div className="space-y-2.5">
+              <h4 className="font-bold text-white text-base leading-tight">{m.name}</h4>
+              <p className="text-xs text-[#7A9BA8] leading-relaxed line-clamp-3">
+                {m.description}
+              </p>
+              
+              {/* Row of custom colored badges */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                <Badge variant="outline" className="bg-[#2E7D32]/10 border-[#2E7D32]/20 text-green-400 text-[10px] py-0 px-2 font-medium">
+                  {Math.round(m.effectiveness_typical * 100)}% Effective
+                </Badge>
+                <Badge variant="outline" className="bg-[#0E7A80]/15 border-[#0E7A80]/20 text-[#4DD6DC] text-[10px] py-0 px-2 font-medium">
+                  {m.duration}
+                </Badge>
+                <Badge variant="outline" className="bg-[#5C3C7A]/20 border-[#5C3C7A]/40 text-[#A855F7] text-[10px] py-0 px-2 font-medium">
+                  {m.access_required}
+                </Badge>
+              </div>
+            </div>
+
+            {/* Action button */}
+            {onShowVisualization && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-4 w-full border-[#0E7A80]/50 text-[#4DD6DC] bg-[#0E7A80]/5 hover:bg-[#0E7A80]/20 hover:text-white transition-all text-xs font-semibold"
+                onClick={() => onShowVisualization(m.method)}
+              >
+                See how it works →
+              </Button>
+            )}
+          </div>
+        ))}
       </div>
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <Button onClick={() => navigate("/facilities")}>Find nearest clinic →</Button>
+
+      {/* Orange Callout Bar */}
+      <div className="bg-[#E07B39]/10 border border-[#E07B39]/30 rounded-xl p-3.5 flex items-start gap-2.5">
+        <Info className="h-4.5 w-4.5 text-[#E07B39] shrink-0 mt-0.5" />
+        <p className="text-xs text-[#E8F4F5] leading-relaxed">
+          <strong className="text-[#E07B39] font-bold">Important:</strong> Please confirm with your nearest clinic or community health worker before starting any contraceptive method.
+        </p>
+      </div>
+
+      {/* CTA Buttons */}
+      <div className="flex flex-col sm:flex-row gap-3 pt-1">
+        <Button
+          onClick={() => navigate("/facilities")}
+          className="flex-1 bg-[#0E7A80] hover:bg-[#0A6268] text-white font-bold text-xs py-2.5 shadow-lg shadow-[#0E7A80]/20 transition-all flex items-center justify-center gap-1.5 rounded-xl"
+        >
+          <Compass className="h-4 w-4" /> Find Nearest Clinic
+        </Button>
         <Button
           variant="outline"
           onClick={() => {
             setSelectedMethods(data.recommendations.map((r) => r.method));
             navigate(`/compare?methods=${data.recommendations.map((r) => r.method).join(",")}`);
           }}
+          className="flex-1 border-[#5C3C7A]/60 text-[#D8B4FE] bg-[#5C3C7A]/10 hover:bg-[#5C3C7A]/25 hover:text-white transition-all text-xs font-semibold rounded-xl"
         >
-          Compare all methods →
+          Compare All Matches
         </Button>
       </div>
     </div>

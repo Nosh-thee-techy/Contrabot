@@ -111,13 +111,13 @@ export default function DoctorAvatar({ doctorId, isTalking, chatState, currentAn
       <img
         src={`/avatars/${doctorId}-illustration.png`}
         alt={`Dr. ${doctorName}`}
-        className="w-48 h-48 object-contain rounded-full shadow-md border border-teal-500 bg-white"
+        className="w-48 h-48 object-contain rounded-full shadow-md border border-[#0E7A80] bg-[#111F2E]"
         onError={(e) => {
           e.target.style.display = "none";
         }}
       />
-      <p className="text-teal-700 font-semibold text-lg">Dr. {doctorName}</p>
-      <p className="text-gray-500 text-xs">AI Contraception Counselor</p>
+      <p className="text-teal-400 font-semibold text-lg">Dr. {doctorName}</p>
+      <p className="text-[#7A9BA8] text-xs">AI Contraception Counselor</p>
     </div>
   );
 

@@ -37,3 +37,28 @@
   animation: pulseGlow 2s infinite ease-in-out;
 }
 
+@keyframes pulse-dots {
+  0%, 100% { transform: scale(0.6); opacity: 0.4; }
+  50% { transform: scale(1.2); opacity: 1; }
+}
+.typing-dot {
+  animation: pulse-dots 1.2s infinite ease-in-out;
+}
+
+@keyframes slide-down {
+  from { transform: translateY(-8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.animate-slide-down {
+  animation: slide-down 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes border-flash {
+  0% { border-color: rgba(14, 122, 128, 0.8); box-shadow: 0 0 12px rgba(14, 122, 128, 0.3); }
+  100% { border-color: rgba(14, 122, 128, 0.2); box-shadow: none; }
+}
+.animate-border-flash {
+  animation: border-flash 1.2s ease-out forwards;
+}
+
+

@@ -127,3 +127,38 @@ The Python suite covers engine safety behavior and WhatsApp webhook handling. Th
 - [ ] Real facility exports have been imported into `data/facilities/`
 - [ ] APHRC data has been ingested with `python ingest.py`
 - [ ] Production `.env` values are configured for API, Redis, PostgreSQL, and CORS
+
+---
+
+## Model Architecture, Safety & Metrics
+
+### 1. Model Stack & Integration
+*   **Conversational Counseling Model**: **Anthropic Claude** (via API) is used as our primary Large Language Model (LLM) to deliver warm, empathetic, and dialect-calibrated counseling.
+*   **Embedding Model**: **`all-MiniLM-L6-v2`** (a 384-dimensional Sentence Transformer) embeds clinical manuals and APHRC survey briefs.
+*   **Translation Foundation**: **Meta's NLLB-200** was used for foundation translations, followed by native speaker back-translation and Flesch-Kincaid Grade 6 reading-level prompt tuning.
+*   **Deterministic Safety Module**: A pure Python expert system that acts as the initial clinical filter, checking user parameters against a hardcoded eligibility matrix before calling generative APIs.
+
+### 2. In-Context "Training" & Calibration
+Rather than running expensive parameter fine-tuning (which increases hallucination risk and violates strict clinical safety boundaries), we calibrated the system's behavior using:
+*   **Retrieval-Augmented Generation (RAG)**: Guidelines chunked (512 tokens with 64-token overlap) and retrieved via cosine similarity using a local **ChromaDB** vector database.
+*   **Dialogue Calibration**: Instructing the model to utilize localized colloquial terminology (Sheng/Swahili like *mpira*, *kipandikizi*, *kitanzi*, *p2*) to replace confusing clinical terms.
+*   **Hyperparameter Tuning**: Calibrating LLM generation temperature to `0.6` to balance conversational fluidity with strict factual consistency.
+
+### 3. Primary Evaluation Metrics
+*   **Machine Learning & Retrieval (RAGAS Framework)**:
+    *   *Faithfulness* (**Target: >95%**): Evaluates that the generated response is strictly grounded in the retrieved WHO guidelines.
+    *   *Answer Relevancy* (**Target: >90%**): Evaluates how closely the output addresses the user's question.
+    *   *Context Precision* (**Target: >90%**): Measures the retrieval accuracy of the ChromaDB vector queries.
+*   **Recommendation Rankings**:
+    *   *NDCG (Normalized Discounted Cumulative Gain)*: Evaluates the ranking engine's ability to prioritize the safest and most preference-aligned methods at the top of the list.
+*   **Clinical Safety**:
+    *   *Sensitivity/Recall* (**Target: 100%**): Assures that all unsafe methods (MEC Categories 3 and 4) are correctly identified and hard-filtered by the deterministic safety engine.
+*   **Real-world Impact**:
+    *   *Contraceptive Continuation Rate* (**Target: 25% reduction in discontinuation**): Pre-counseling users on side effects to prevent fear-driven drop-off.
+    *   *Referral Conversion Rate* (**Target: 70% clinic attendance**): Connecting digital triage users to physical clinics.
+
+### 4. Data Safety & Privacy
+*   **Zero PII Persistent Logging**: No names or phone numbers are saved to our SQL encounter databases. CHW outcome logging is limited to anonymous demographic metrics (district, recommended method, accepted status).
+*   **Hashing Identifiers**: Phone numbers (`MSISDN`) are processed using **bcrypt** or **MD5 hashing** to track unique active sessions, keeping raw numbers out of server log traces.
+*   **Ephemeral Redis Caching**: User response profiles are cached temporarily in Redis with a strict **30-minute expiration TTL** and are purged completely upon session completion or timeout.
+*   **Local Triage Firewalls**: The safety engine is run entirely locally. Emergency medical questions (e.g. pain or severe bleeding) are intercepted by a triage keyword filter, bypassing the LLM entirely to serve immediate physical clinic referral cards.
